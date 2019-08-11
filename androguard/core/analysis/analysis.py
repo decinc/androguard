@@ -1244,8 +1244,8 @@ class Analysis:
             for off, instruction in current_method.get_instructions_idx():
                 op_value = instruction.get_op_value()
 
-                # 1) check for class calls: const-class (0x1c), new-instance (0x22)
-                if op_value in [0x1c, 0x22]:
+                # 1) check for class calls: const-class (0x1c), new-instance (0x22), check-cast(0x1f)
+                if op_value in [0x1c, 0x22, 0x1f]:
                     idx_type = instruction.get_ref_kind()
                     # type_info is the string like 'Ljava/lang/Object;'
                     type_info = instruction.cm.vm.get_cm_type(idx_type).lstrip(b'[')
@@ -1335,6 +1335,17 @@ class Analysis:
                     else:
                         # write access to a field
                         self.classes[cur_cls_name].AddFXrefWrite(current_method, self.classes[cur_cls_name], field_item)
+                # 5) check instance-of, same with step1, but different instruction type
+                elif op_value == 0x20:
+                    idx_type = instruction.get_ref_kind()
+                    type_info = instruction.cm.vm.get_cm_type(idx_type)
+                    if type_info != cur_cls_name:
+                        if type_info not in self.classes:
+                            self.classes[type_info] = ClassAnalysis(ExternalClass(type_info))
+                        cur_cls = self.classes[cur_cls_name]
+                        oth_cls = self.classes[type_info]
+                        cur_cls.AddXrefTo(ref_type[op_value], oth_cls, current_method, off)
+                        oth_cls.AddXrefFrom(ref_type[op_value], cur_cls, current_method, off)
 
     def get_method(self, method):
         """
